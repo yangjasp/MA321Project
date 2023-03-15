@@ -12,6 +12,7 @@ library(nnet)
 library(ipred)
 library(tree)
 library(randomForest)
+library(ggsci)
 
 ####### Data cleaning --------
 
@@ -29,45 +30,44 @@ table(house_data$OverallCondCat)
 
 # Continuing with the exploratory analysis, we are plotting LE in different ways
 
-## Plot 1: Histogram of life expectancy
-p1 <- ggplot(house_data, aes(x = OverallCond)) +
-  geom_histogram(stat = "count") +
+## Plot 1: Histogram of sale price
+p1 <- ggplot(house_data, aes(SalePrice)) +
+  geom_histogram(color = "#000000", fill = "#0099F8") +
   theme_bw()+
-  xlab("Overall House Condition")+
+  xlab("Sale Price")+
   ylab("Frequency")+ 
   theme(plot.margin = unit(c(1,0.5,0.5,0.5), "cm"))
 
 ## Plot 2: boxplot by Health Spending quantiles
 # Setting the quantiles
-health_expend_quantiles <- quantile(LE_data$health_expend_perc_gdp, c(0.25, 0.5, 0.75), na.rm = TRUE)
-temp <- LE_data %>%
-  dplyr::mutate(HE_quantile = case_when(
-    health_expend_perc_gdp < health_expend_quantiles[1] ~ "0-25%",
-    health_expend_perc_gdp < health_expend_quantiles[2] ~ "25-50%",
-    health_expend_perc_gdp < health_expend_quantiles[3] ~ "50-75%",
-    health_expend_perc_gdp >= health_expend_quantiles[3] ~ "70-100%")) %>%
-  dplyr::filter(!(is.na(health_expend_perc_gdp)))
+sale_price_quantiles <- quantile(house_data$SalePrice, c(0.25, 0.5, 0.75), na.rm = TRUE)
+temp <- house_data %>%
+  dplyr::mutate(SP_quantile = case_when(
+    SalePrice < sale_price_quantiles[1] ~ "0-25%",
+    SalePrice < sale_price_quantiles[2] ~ "25-50%",
+    SalePrice < sale_price_quantiles[3] ~ "50-75%",
+    SalePrice >= sale_price_quantiles[3] ~ "70-100%"))
 # Plotting
-p2 <- ggplot(temp, aes(x = HE_quantile, y = life_expectancy, 
-                       color = HE_quantile)) +
+p2 <- ggplot(temp, aes(x = SP_quantile, y = OverallCond, 
+                       color = SP_quantile)) +
   geom_boxplot(show.legend = FALSE) +
   ggsci::scale_color_jama()+
   theme(axis.text.x = element_text(angle = 45))+
   theme_bw()+
-  xlab("Health expenditure per capita (% GDP) quantile")+
-  ylab("Life Expectancy (Years)") + 
+  xlab("Sale price quantile")+
+  ylab("Overall Condition") + 
   theme(plot.margin = unit(c(1,0.5,0.5,0.5), "cm"))
 
 ## Plot 3: Healthcare per capita (plus visualization of size per continent)
-p3 <- ggplot(data = LE_data, aes(x = gdp_pc, 
-                                 y = life_expectancy))+
-  geom_point(aes(size = pop_total, color = Continent),
+p3 <- ggplot(data = house_data, aes(x = OverallCond, 
+                                 y =SalePrice))+
+  geom_point(aes(size = log(X1stFlrSF), color = HouseStyle),
              show.legend = c(TRUE))  + 
   ggsci::scale_color_jama()+
   scale_x_log10() + 
   theme_bw()+
-  ylab("Life Expectancy (Years)") +
-  xlab("GDP Per Capita ($)") +
+  ylab("Overall Condition") +
+  xlab("Sale Price") +
   guides(size = "none") +
   theme(plot.margin = unit(c(1,0.5,0.5,0.5), "cm"))
 
@@ -135,4 +135,78 @@ text(fit.tree)
 
 ########
 #### Question 3
+########
+
+fit2 <- glm(log(SalePrice) ~ .,
+            data = dplyr::select(house_data,
+                                                   LotArea, 
+                                                   LotConfig,
+                                                   Condition1,
+                                                   BldgType,
+                                                   HouseStyle,
+                                                   OverallQual,
+                                                   YearBuilt,
+                                                   X1stFlrSF,
+                                                   KitchenQual,
+                                                   SalePrice, OverallCondCat
+))
+
+par(mfrow = c(2,2))
+plot(fit2)
+
+
+
 #########
+#### Question 3 --------------
+#########
+
+#####
+### A. Random forest to predict sale price
+######
+
+set.seed(123)
+## Split into train and test
+test.indices <- sample(1:nrow(house_data), size = nrow(house_data)*.2, replace = FALSE)
+
+training_data <- house_data[-test.indices,]
+test_data <- house_data[test.indices,]
+
+fit2 <- randomForest(SalePrice ~.,data = dplyr::select(house_data,
+                                                       LotArea, 
+                                                       LotConfig,
+                                                       Condition1,
+                                                       BldgType,
+                                                       HouseStyle,
+                                                       OverallQual,
+                                                       YearBuilt,
+                                                       X1stFlrSF,
+                                                       KitchenQual,
+                                                       SalePrice, OverallCondCat
+), estimator = "cv")
+
+
+plot(fit2)
+text(fit2)
+ 
+mypredict <- function(object, newdata){
+  predict(object, newdata = newdata, type = c("response"))
+}
+
+# b 
+fit1 <- tree(SalePrice ~., data = dplyr::select(house_data,
+                                                LotArea, 
+                                                LotConfig,
+                                                Condition1,
+                                                BldgType,
+                                                HouseStyle,
+                                                OverallQual,
+                                                YearBuilt,
+                                                X1stFlrSF,
+                                                KitchenQual,
+                                                SalePrice, OverallCondCat
+))
+fit1
+
+summary(fit1)
+plot(fit1)
+text(fit1)
