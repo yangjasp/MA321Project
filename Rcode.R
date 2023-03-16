@@ -14,7 +14,9 @@ library(tree)
 library(randomForest)
 library(ggsci)
 
-####### Data cleaning --------
+########
+#### Data cleaning --------
+########
 
 ## 1. Make new column for house condition category
 house_data <- house_data %>%
@@ -24,16 +26,31 @@ house_data <- house_data %>%
                 OverallCondGood = ifelse(OverallCondCat == "good", 1, 0))
 table(house_data$OverallCondCat)
 
+## 2. Merge two house style categories for plotting: 2.5 stories
+house_data <- house_data %>%
+  dplyr::mutate(HouseStyleCat = case_when(HouseStyle %in% c("1.5Fin", "1.5Unf") ~ "1.5 Story",
+                                          HouseStyle == "1Story" ~ "1 Story",
+                                          HouseStyle == "2Story" ~ "2 Story",
+                                          HouseStyle %in% c("2.5Fin", "2.5Unf") ~ "2.5 Story",
+                                          HouseStyle %in% c("SFoyer", "SLvl") ~ "Split Level/Foyer"))
+
+## 3. Add 1st + 2nd floor square feet
+house_data <- house_data %>%
+  dplyr::mutate(TotalSF = X1stFlrSF + X2ndFlrSF)
+
 ########
 ### Question 1 ---------------
 ########
-
-# Continuing with the exploratory analysis, we are plotting LE in different ways
+  ####
+  #### Explore data through plots and tables
 
 ## Plot 1: Histogram of sale price
 p1 <- ggplot(house_data, aes(SalePrice)) +
   geom_histogram(color = "#000000", fill = "#0099F8") +
+  scale_x_log10(labels = label_comma(), 
+                breaks = c(0, 50000, 100000, 200000, 300000, 400000, 500000)) +
   theme_bw()+
+  theme(axis.text.x = element_text(angle = -45, vjust = 0.5, hjust=1))+
   xlab("Sale Price")+
   ylab("Frequency")+ 
   theme(plot.margin = unit(c(1,0.5,0.5,0.5), "cm"))
@@ -48,33 +65,37 @@ temp <- house_data %>%
     SalePrice < sale_price_quantiles[3] ~ "50-75%",
     SalePrice >= sale_price_quantiles[3] ~ "70-100%"))
 # Plotting
-p2 <- ggplot(temp, aes(x = SP_quantile, y = OverallCond, 
-                       color = SP_quantile)) +
+p2 <- ggplot(temp, aes(x = HouseStyleCat, y = SalePrice, 
+                       color = HouseStyleCat)) +
   geom_boxplot(show.legend = FALSE) +
   ggsci::scale_color_jama()+
   theme(axis.text.x = element_text(angle = 45))+
+  scale_y_log10(labels = label_comma(), 
+                breaks = c(0, 50000, 100000, 200000, 300000, 400000, 500000))+
   theme_bw()+
-  xlab("Sale price quantile")+
-  ylab("Overall Condition") + 
+  xlab("House Style")+
+  ylab("Sale Price") + 
   theme(plot.margin = unit(c(1,0.5,0.5,0.5), "cm"))
 
 ## Plot 3: Healthcare per capita (plus visualization of size per continent)
-p3 <- ggplot(data = house_data, aes(x = OverallCond, 
-                                 y =SalePrice))+
-  geom_point(aes(size = log(X1stFlrSF), color = HouseStyle),
+p3 <- ggplot(data = house_data, aes(x = TotalSF, 
+                                 y = SalePrice))+
+  geom_point(aes(color = HouseStyleCat),
              show.legend = c(TRUE))  + 
   ggsci::scale_color_jama()+
-  scale_x_log10() + 
+  scale_x_log10(breaks = c(500,1000,2000,3000))+
+  scale_y_log10(labels = label_comma(), 
+                breaks = c(0, 50000, 100000, 200000, 300000, 400000, 500000))+
   theme_bw()+
-  ylab("Overall Condition") +
-  xlab("Sale Price") +
+  ylab("Sale Price") +
+  xlab("Total Square Feet") +
   guides(size = "none") +
   theme(plot.margin = unit(c(1,0.5,0.5,0.5), "cm"))
 
 # Plot in a grid with cowplot::plot_grid() and also give titles
-top <- cowplot::plot_grid(p1, p2, labels = c("A. Histogram of Life Expectancy", "B. Life Expectancy by Healthcare Spending"),
+top <- cowplot::plot_grid(p1, p2, labels = c("A. Histogram of Sale Price", "B. Overall Condition by Sale Price"),
                           hjust = -0.1)
-bottom <- cowplot::plot_grid(p3, labels = c("C. Life Expectancy by Population and GDP per capita"),
+bottom <- cowplot::plot_grid(p3, labels = c("C. "),
                              hjust = -0.1)
 cowplot::plot_grid(top, bottom, ncol = 1)
 
