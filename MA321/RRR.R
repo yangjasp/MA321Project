@@ -1,0 +1,121 @@
+######
+### MA321 Project: Data Cleaning File --------------
+#######
+
+####### Data --------
+house_data <- read.csv("house-data.csv")
+
+####### Libraries -----------
+install.packages("dplyr")
+install.packages("ggplot2")
+install.packages("nnet")
+install.packages("ipred")
+install.packages("tree")
+install.packages("randomForest")
+install.packages("ggsci")
+
+library(dplyr)
+library(ggplot2)
+library(nnet)
+library(ipred)
+library(tree)
+library(randomForest)
+library(ggsci)
+
+
+
+########
+#### Data cleaning --------
+########
+
+## 1. Make new column for house condition category
+house_data <- house_data %>%
+  dplyr::mutate(OverallCondCat = case_when(OverallCond <= 3 ~ "poor",
+                                           OverallCond <= 6 ~ "average",
+                                           OverallCond >6 ~ "good"),
+                OverallCondGood = ifelse(OverallCondCat == "good", 1, 0))
+table(house_data$OverallCondCat)
+
+## 2. Merge two house style categories for plotting: 2.5 stories
+house_data <- house_data %>%
+  dplyr::mutate(HouseStyleCat = case_when(HouseStyle %in% c("1.5Fin", "1.5Unf") ~ "1.5 Story",
+                                          HouseStyle == "1Story" ~ "1 Story",
+                                          HouseStyle == "2Story" ~ "2 Story",
+                                          HouseStyle %in% c("2.5Fin", "2.5Unf") ~ "2.5 Story",
+                                          HouseStyle %in% c("SFoyer", "SLvl") ~ "Split Level/Foyer"))
+
+## 4. Change NAs that are actually a category "None" (as opposed to missing).
+# Confirmed this from data dictionary
+house_data <- house_data %>%
+  dplyr::mutate(Alley = ifelse(is.na(Alley), "None", Alley),
+                BsmtQual = ifelse(is.na(BsmtQual), "None", BsmtQual),
+                BsmtCond = ifelse(is.na(BsmtCond), "None", BsmtCond),
+                GarageType = ifelse(is.na(GarageType), "None", GarageType),
+                GarageCond = ifelse(is.na(GarageCond), "None", GarageCond),
+                PoolQC = ifelse(is.na(PoolQC), "None", PoolQC),
+                Fence = ifelse(is.na(Fence), "None", Fence))
+
+
+
+
+
+#######
+### Question 2: 
+########
+
+####
+## A. 
+####
+## Multinomial logistic regression
+fit1 <- nnet::multinom(OverallCondCat ~ ., data = dplyr::select(house_data,
+                                                                LotArea, 
+                                                                LotConfig,
+                                                                Condition1,
+                                                                BldgType,
+                                                                HouseStyle,
+                                                                OverallQual,
+                                                                YearBuilt,
+                                                                X1stFlrSF,
+                                                                KitchenQual,
+                                                                SalePrice, OverallCondCat
+), family = "binomial")
+
+
+####
+## B. 
+####
+house_data$OverallCondCat <- as.factor(house_data$OverallCondCat)
+
+fit.tree <- tree(OverallCondCat ~ ., data = dplyr::select(house_data,
+                                                          HouseStyle,
+                                                          YearBuilt,
+                                                          X1stFlrSF,
+                                                          SalePrice, OverallCondCat))
+
+
+fit.tree <- tree(OverallCondCat ~ ., data = dplyr::select(house_data,
+                                                          LotArea, 
+                                                          LotConfig,
+                                                          Condition1,
+                                                          BldgType,
+                                                          HouseStyle,
+                                                          OverallQual,
+                                                          YearBuilt,
+                                                          X1stFlrSF,
+                                                          KitchenQual,
+                                                          SalePrice, OverallCondCat
+))
+
+## summary
+summary(fit.tree)
+
+## plot
+plot(fit.tree)
+text(fit.tree)
+
+dan <- (round(coef(fit1),4))
+dan<-data.frame(dan)
+View(t(dan))
+
+library(flextable)
+install.packages("flextable")
