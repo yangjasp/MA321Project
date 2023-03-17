@@ -14,29 +14,10 @@ library(tree)
 library(randomForest)
 library(ggsci)
 
-########
-#### Data cleaning --------
-########
-
-## 1. Make new column for house condition category
-house_data <- house_data %>%
-  dplyr::mutate(OverallCondCat = case_when(OverallCond <= 3 ~ "poor",
-                                           OverallCond <= 6 ~ "average",
-                                           OverallCond >6 ~ "good"),
-                OverallCondGood = ifelse(OverallCondCat == "good", 1, 0))
-table(house_data$OverallCondCat)
-
-## 2. Merge two house style categories for plotting: 2.5 stories
-house_data <- house_data %>%
-  dplyr::mutate(HouseStyleCat = case_when(HouseStyle %in% c("1.5Fin", "1.5Unf") ~ "1.5 Story",
-                                          HouseStyle == "1Story" ~ "1 Story",
-                                          HouseStyle == "2Story" ~ "2 Story",
-                                          HouseStyle %in% c("2.5Fin", "2.5Unf") ~ "2.5 Story",
-                                          HouseStyle %in% c("SFoyer", "SLvl") ~ "Split Level/Foyer"))
-
-## 3. Add 1st + 2nd floor square feet
-house_data <- house_data %>%
-  dplyr::mutate(TotalSF = X1stFlrSF + X2ndFlrSF)
+#######
+## Data Cleaning ---------
+#######
+source("DataCleaning.R")
 
 ########
 ### Question 1 ---------------
@@ -44,7 +25,9 @@ house_data <- house_data %>%
   ####
   #### Explore data through plots and tables
 
+######
 ## Plot 1: Histogram of sale price
+######
 p1 <- ggplot(house_data, aes(SalePrice)) +
   geom_histogram(color = "#000000", fill = "#0099F8") +
   scale_x_log10(labels = label_comma(), 
@@ -78,9 +61,11 @@ p2 <- ggplot(temp, aes(x = HouseStyleCat, y = SalePrice,
   theme(plot.margin = unit(c(1,0.5,0.5,0.5), "cm"))
 
 ## Plot 3: Healthcare per capita (plus visualization of size per continent)
-p3 <- ggplot(data = house_data, aes(x = TotalSF, 
+house_data$OverallCondCat <- factor(house_data$OverallCondCat, 
+                                    levels = c("good", "average", "poor"))
+p3 <- ggplot(data = house_data, aes(x = GrLivArea, 
                                  y = SalePrice))+
-  geom_point(aes(color = HouseStyleCat),
+  geom_point(aes(color = OverallCondCat),
              show.legend = c(TRUE))  + 
   ggsci::scale_color_jama()+
   scale_x_log10(breaks = c(500,1000,2000,3000))+
@@ -88,24 +73,113 @@ p3 <- ggplot(data = house_data, aes(x = TotalSF,
                 breaks = c(0, 50000, 100000, 200000, 300000, 400000, 500000))+
   theme_bw()+
   ylab("Sale Price") +
-  xlab("Total Square Feet") +
+  xlab("Above Ground Square Feet") +
   guides(size = "none") +
   theme(plot.margin = unit(c(1,0.5,0.5,0.5), "cm"))
 
 # Plot in a grid with cowplot::plot_grid() and also give titles
-top <- cowplot::plot_grid(p1, p2, labels = c("A. Histogram of Sale Price", "B. Overall Condition by Sale Price"),
+top <- cowplot::plot_grid(p1, p2, labels = c("A. Histogram of Sale Price", "B. Sale Price by House Style"),
                           hjust = -0.1)
-bottom <- cowplot::plot_grid(p3, labels = c("C. "),
+bottom <- cowplot::plot_grid(p3, labels = c("C. Sale Price and Above Ground Square Feet"),
                              hjust = -0.1)
 cowplot::plot_grid(top, bottom, ncol = 1)
 
+######
+### Plot 2: Correlation of continuous variables
+######
 
+# Step 1: Select numeric columns and also remove ID 
+class_vec <- rep("character", times = ncol(house_data))
+for (i in 1:ncol(house_data)){
+  class_vec[i] <- class(house_data[,i])
+}
+
+house_data_numeric <- house_data[,class_vec == "integer"]
+house_data_numeric <- subset(house_data_numeric, select = -Id)
+
+# Step 2: Select columns that aren't 90% or more of zeroes
+perc_zero_vec <- rep(0, times = ncol(house_data_numeric))
+
+for (i in 1:ncol(house_data_numeric)){
+  perc_zero_vec[i] <- table(house_data_numeric[,i] == 0)[2]/nrow(house_data_numeric)
+}
+
+perc_zero_vec[is.na(perc_zero_vec)] <- 0 # If no zeroes, was NA. Make it 0
+
+house_data_numeric <- house_data_numeric[,perc_zero_vec < 0.9]
+
+# Update Names
+names(house_data_numeric) <- c("Lot frontage", "Lot area", "Overall quality",
+                               "Overall condition", "Year built", "Masonry area",
+                               "Basement sq. feet", "First floor sq. feet",
+                               "Second floor sq. feet", "Living area sq. feet",
+                               "Full baths", "Bedrooms above ground", 
+                               "Kitchens above ground", "No. rooms above ground",
+                               "Fireplaces", "Garage area", "Month sold", 
+                               "Year sold", "Sale Price")
+
+# Now plot correlations with corrplot
+
+#corrplot(cor(house_data_numeric, use = "pairwise.complete.obs"),
+         #method = "color", 
+         #addCoef.col="black",  
+         #number.cex=0.5) # this had text labes with cor coefficients
+
+corrplot(cor(house_data_numeric, use = "pairwise.complete.obs"),
+         tl.col='black')
+
+# Look at correlations for reporting
+View(cor(house_data_numeric, use = "pairwise.complete.obs"))
+
+
+######
+#### Table 1: 
+######
+    ## Note that this is only the code to produce the results of the table
+    ## We made the table itself in word
+
+
+# Number of continuous or ordinal variables (excluding ID):
+num_numeric <- ncol(house_data_numeric) + sum(perc_zero_vec > 0.9) # because we removed these cols
+perc_numeric <- num_numeric/(ncol(house_data) - 4) # subtract ID column and three we created when counting
+num_numeric
+perc_numeric
+
+
+# Number of categorical variables
+num_cat <- (ncol(dplyr::select(house_data, -c(HouseStyleCat,OverallCondCat,
+                                OverallCondGood))) - 1) - num_numeric
+perc_cat <- num_cat/(ncol(house_data) - 4) # sutract ID col and 3 we created
+
+# Categorical variables with over 90% in one category
+house_data_cat <- house_data[,class_vec != "integer"]
+
+house_data_cat <- dplyr::select(house_data_cat, -c(HouseStyleCat,OverallCondCat,
+                             OverallCondGood))
+
+
+max_cat_size_vec <- rep(0, times = ncol(house_data_cat))
+
+for (i in 1:ncol(house_data_cat)){
+  max_cat_size_vec[i] <- max(table(house_data_cat[,i]))/nrow(house_data_numeric)
+}
+
+table(max_cat_size_vec > 0.9)
 
 #######
-#### Question 4
+### Supplemental figure 1
 #######
 
-### What variables would be important 
+S1 <- ggplot(house_data, aes(OverallCond)) +
+  geom_histogram(color = "#000000", fill = "#0099F8") +
+  scale_x_continuous(labels = label_comma(), 
+                breaks = 1:10) +
+  theme_bw()+
+  xlab("Overall Condition")+
+  ylab("Count")+ 
+  theme(plot.margin = unit(c(1,0.5,0.5,0.5), "cm"))
+
+table(house_data$OverallCond == 5)/nrow(house_data)
 
 
-### 
+

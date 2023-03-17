@@ -34,6 +34,13 @@ house_data <- house_data %>%
                                           HouseStyle %in% c("2.5Fin", "2.5Unf") ~ "2.5 Story",
                                           HouseStyle %in% c("SFoyer", "SLvl") ~ "Split Level/Foyer"))
 
-## 3. Add 1st + 2nd floor square feet
+## 4. Change NAs that are actually a category "None" (as opposed to missing).
+  # Confirmed this from data dictionary
 house_data <- house_data %>%
-  dplyr::mutate(TotalSF = X1stFlrSF + X2ndFlrSF)
+  dplyr::mutate(Alley = ifelse(is.na(Alley), "None", Alley),
+                BsmtQual = ifelse(is.na(BsmtQual), "None", BsmtQual),
+                BsmtCond = ifelse(is.na(BsmtCond), "None", BsmtCond),
+                GarageType = ifelse(is.na(GarageType), "None", GarageType),
+                GarageCond = ifelse(is.na(GarageCond), "None", GarageCond),
+                PoolQC = ifelse(is.na(PoolQC), "None", PoolQC),
+                Fence = ifelse(is.na(Fence), "None", Fence))
