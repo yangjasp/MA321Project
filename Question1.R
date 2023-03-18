@@ -95,6 +95,7 @@ for (i in 1:ncol(house_data)){
 }
 
 house_data_numeric <- house_data[,class_vec == "integer"]
+house_data_numeric_IDs <- house_data_numeric$Id
 house_data_numeric <- subset(house_data_numeric, select = -Id)
 
 # Step 2: Select columns that aren't 90% or more of zeroes
@@ -129,7 +130,7 @@ corrplot(cor(house_data_numeric, use = "pairwise.complete.obs"),
          tl.col='black')
 
 # Look at correlations for reporting
-View(cor(house_data_numeric, use = "pairwise.complete.obs"))
+# View(cor(house_data_numeric, use = "pairwise.complete.obs"))
 
 
 ######
@@ -154,14 +155,14 @@ perc_cat <- num_cat/(ncol(house_data) - 4) # sutract ID col and 3 we created
 # Categorical variables with over 90% in one category
 house_data_cat <- house_data[,class_vec != "integer"]
 
-house_data_cat <- dplyr::select(house_data_cat, -c(HouseStyleCat,OverallCondCat,
+house_data_cat_original <- dplyr::select(house_data_cat, -c(HouseStyleCat,OverallCondCat,
                              OverallCondGood))
 
 
-max_cat_size_vec <- rep(0, times = ncol(house_data_cat))
+max_cat_size_vec <- rep(0, times = ncol(house_data_cat_original))
 
-for (i in 1:ncol(house_data_cat)){
-  max_cat_size_vec[i] <- max(table(house_data_cat[,i]))/nrow(house_data_numeric)
+for (i in 1:ncol(house_data_cat_original)){
+  max_cat_size_vec[i] <- max(table(house_data_cat_original[,i]))/nrow(house_data_numeric)
 }
 
 table(max_cat_size_vec > 0.9)
